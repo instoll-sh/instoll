@@ -65,19 +65,19 @@ step() {
     echo -e "\e[1;32m↪\e[0m [$current_step/$steps] \e[1m$1\e[0m"
 }
 
-# shasum_cmd=""
-# if available sha256; then
-#     shasum_cmd="sha256sum"
-# elif available shasum; then
-#     shasum_cmd="shasum -a 256"
-# else
-#     SKIP_CHECKSUM_VALIDATION="true"
-#     write_log "Skipping checksum validation"
-# fi
+shasum_cmd=""
+if available sha256; then
+    shasum_cmd="sha256sum"
+elif available shasum; then
+    shasum_cmd="shasum -a 256"
+else
+    SKIP_CHECKSUM_VALIDATION="true"
+    echo "Skipping checksum validation"
+fi
 
-# validate_checksum() {
-#     log $shasum_cmd --quiet --status -c $@
-# }
+validate_checksum() {
+    $shasum_cmd --quiet --status -c $@
+}
 
 cd "$TEMP_DIR"
 
@@ -86,21 +86,21 @@ echo ""
 step "Downloading executable"
 curl -fSLO --progress-bar "$EXECUTABLE_LINK"
 
-SKIP_CHECKSUM_VALIDATION=true
+# SKIP_CHECKSUM_VALIDATION=true
 
-if [[ ! $SKIP_CHECKSUM_VALIDATION == "true" ]]; then
+if [[ ! "$SKIP_CHECKSUM_VALIDATION" == "true" ]]; then
     # ((steps++))
     step "Validating checksum"
-    log curl -LOs "$EXECUTABLE_LINK.sha256"
+    curl -LOs "$EXECUTABLE_LINK.sha256"
 
     # File integrity check
     if validate_checksum instoll.sha256; then
-        write_log "✅ Checksum validated"
+        echo "✅ Checksum validated"
     else
-        write_log "❌ The checksum is invalid, please try again"
-        write_log "    If the result is the same - report the error at this link: https://github.com/instoll.sh/instoll/issues/new?assignees=okineadev&labels=bug&template=bug_report.md&title=[Bug]:+invalid+checksum"
+        echo "❌ The checksum is invalid, please try again"
+        echo "    If the result is the same - report the error at this link: https://github.com/instoll-sh/instoll/issues/new?assignees=okineadev&labels=bug&template=bug_report.md&title=[Bug]:+invalid+checksum"
 
-        log rm -rf "$TEMP_DIR"
+        rm -rf "$TEMP_DIR"
         exit 1
     fi
 fi
