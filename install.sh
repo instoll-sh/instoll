@@ -6,7 +6,7 @@
 # shellcheck disable=SC2153
 TEMP="$PREFIX/tmp"
 TEMP_DIR="$TEMP/instoller"
-EXECUTABLE_LINK="https://github.com/instoll.sh/instoll/releases/latest/download/instoll"
+EXECUTABLE_LINK="https://github.com/instoll-sh/instoll/releases/latest/download/instoll"
 
 mkdir "$TEMP_DIR"
 
