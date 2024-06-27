@@ -1,0 +1,10 @@
+{
+    "recommendations": [
+        "DavidAnson.vscode-markdownlint",
+        "mads-hartmann.bash-ide-vscode",
+        "docsmsft.docs-yaml",
+        "shardulm94.trailing-spaces",
+        "redhat.vscode-yaml",
+        "bierner.markdown-checkbox"
+    ]
+}

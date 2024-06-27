@@ -1,0 +1,245 @@
+#!/usr/bin/env bash
+
+# Function to print error messages
+error() {
+    echo -e "\e[1;31mERROR!\e[0m\n\n  $1"
+    exit 1
+}
+
+# Function to create a hyperlink in terminal
+hyperlink() {
+    echo -e "\e]8;;$1\e\\$2\e]8;;\e\\"
+}
+
+# Remove color markings from text
+normalize() {
+    echo -e "$1" | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]//g"
+}
+
+# shellcheck disable=SC2120
+wrap_text() {
+    local text="$1"
+    local lines=()
+
+    # Read the text line by line
+    while IFS= read -r line; do
+        lines+=("$line")
+    done <<< "$text"
+
+    local margin=1
+    local term_width=$(stty size | awk '{print $2}')
+    local max_len=$((term_width - 2))
+
+    echo "╭$(printf '─%.0s' $(seq 1 "$max_len"))╮"
+
+    for line in "${lines[@]}"; do
+        local normalized_line=$(normalize "$line")
+        # echo "$normalized_line"
+        # Ugly naming
+        local is_larger=$(( max_len - ${#normalized_line} > 0  ))
+
+        printf "│"
+        printf ' %.0s' $(seq 1 $margin)
+        printf "%s" "$line"
+        [[ $is_larger -eq 1 ]] && printf ' %.0s' $(seq 1 $((max_len - margin - ${#normalized_line})))
+        printf "│\n"
+    done
+
+    echo "╰$(printf '─%.0s' $(seq 1 "$max_len"))╯"
+}
+
+# Check if required tools are installed
+if ! command -v curl &> /dev/null; then
+    error "\e[1mcurl\e[0m is not installed."
+fi
+
+if ! command -v jq &> /dev/null; then
+    error "\e[1mjq\e[0m is not installed."
+fi
+
+# Display usage information
+show_help() {
+    echo "Usage: instoll <user>/<repo> or instoll <user>.<repo>"
+    echo ""
+    echo -e "This tool allows automatic installation of packages from \e[1mGitHub\e[0m repositories"
+    echo -e "using the \e[1minstall.sh\e[0m file if it is present."
+    echo ""
+    echo "Options:"
+    echo -e "  <user>/<repo>                       \e[1mGitHub\e[0m repository format for installing the package."
+    echo "  <user>.<repo>                       Alternative format for specifying the repository."
+    echo "  https://useful.tool.sh/install.sh   Link to the installer"
+    echo "  .                                   Install package from current folder"
+    echo ""
+    echo "Examples:"
+    echo "  instoll username/repo"
+    echo "  instoll username.repo"
+    echo "  instoll https://bun.sh/install"
+    echo "  instoll ."
+}
+
+# Get package information based on variables
+get_package_info() {
+    local text=""
+    [[ -n "$PACKAGE_NAME" ]] && echo -e "\e[1mName\e[0m: $PACKAGE_NAME"
+    [[ -n "$DEVELOPER" ]] && echo -e "\e[1mDeveloper\e[0m: $DEVELOPER"
+    [[ -n "$PACKAGE_SOURCE" ]] && echo -e "\e[1mSource code\e[0m: $PACKAGE_SOURCE"
+    [[ -n "$DESCRIPTION" ]] && echo -e "\e[1mDescription\e[0m: $DESCRIPTION"
+    [[ -n "$TAGS" ]] && echo -e "\e[1mTags\e[0m: $TAGS"
+}
+
+print_package_info() {
+    wrap_text "$(get_package_info)"
+    echo ""
+}
+
+prompt() {
+    local attempts=0
+    local question="$1"
+
+    while true; do
+        if ((attempts == 4)); then
+            echo -e "Too many invalid responses. Exiting program.\n"
+            exit 1
+        fi
+
+        # shellcheck disable=SC2059
+        printf "$question \e[1m(Y/n)\e[0m: "
+        read -r response
+        if echo "$response" | grep -Eiq '^(y|yes)$'; then
+            return 1
+
+        elif echo "$response" | grep -Eiq '^(n|no)$'; then
+            return 0
+
+        else
+            if [ "$attempts" -lt 3 ]; then
+                echo -e "\n\e[1;31mInvalid response\e[0m. Please enter '\e[1my\e[0m' or '\e[1mn\e[0m'."
+                sleep "1"
+            fi
+            ((attempts++))
+        fi
+    done
+    unset attempts
+}
+
+github_api() {
+    local username="$2"
+    local repo="$3"
+
+    case "$1" in
+        check_file_availability)
+            local github_api_url="https://api.github.com/repos/$username/$repo/contents"
+            local filename="$4"
+
+            local response="$(curl -s "$github_api_url/$filename")"
+
+            if echo "$response" | jq -e '.message == "Not Found"' &> /dev/null; then
+                return 1
+            else
+                return 0
+            fi
+            ;;
+        get_topics)
+            local github_api_url="https://api.github.com/repos/$username/$repo/topics"
+            local response=$(curl -fsSL "$github_api_url")
+            local result=$(echo "$response" | jq -r '.names | join(", ")')
+
+            echo "$result"
+            ;;
+        get_default_branch)
+            local github_api_url="https://api.github.com/repos/$username/$repo"
+            local response=$(curl -fsSL "$github_api_url")
+            local default_branch="$(echo "$response" | jq -r '.default_branch')"
+
+            echo "$default_branch"
+            ;;
+    esac
+}
+
+instoll() {
+    local installer=""
+
+    if [[ ! "$1" == . ]]; then
+        if [[ $(echo "$1" | grep -E '^\S+([.\/]\S+|$)$') ]]; then
+            local username=$(echo "$1" | sed 's/[./].*//')
+            local repo=$(echo "$1" | sed 's/^[^./]*[./]//')
+            local branch=$(github_api get_default_branch "$username" "$repo")
+
+            local github_url="https://raw.githubusercontent.com/$username/$repo/$branch"
+
+            if github_api check_file_availability "$username" "$repo" "install.sh"; then
+                installer="$github_url/install.sh"
+            else
+                error "file install.sh not found in repository $username/$repo."
+            fi
+
+            if github_api check_file_availability "$username" "$repo" "package.sh"; then
+                local package_sh=$(mktemp)
+                curl -fsSL "$github_url/package.sh" -o "$package_sh"
+                source "$package_sh"
+                rm "$package_sh"
+            fi
+
+            if [[ ! -n "$PACKAGE_NAME" ]]; then
+                PACKAGE_NAME="$repo"
+            fi
+            if [[ ! -n "$PACKAGE_SOURCE" ]]; then
+                PACKAGE_SOURCE="https://github.com/$username/$repo"
+            fi
+            if [[ ! -n "$DEVELOPER" ]]; then
+                DEVELOPER="$(hyperlink "https://github.com/$username" "$username")"
+            fi
+            if [[ ! -n "$TAGS" ]]; then
+                TAGS="$(github_api get_topics "$username" "$repo")"
+            fi
+
+            print_package_info
+
+        elif [[ $(echo "$1" | grep -E '^(\w+([./]\w+|$)|(http[s]://|^)\S+)$') ]]; then
+            installer="$1"
+        fi
+
+        prompt "Install?"
+
+        if [[ $? -eq 1 ]]; then
+            curl -fsSL "$installer" | INSTOLL=true bash
+        else
+            echo "Canceled."
+            exit 0
+        fi
+
+    elif [[ "$1" == . ]]; then
+        if [[ -f "install.sh" ]]; then
+            local folder_name=$(basename "$(pwd)")
+
+            if [[ -f "package.sh" ]]; then
+                source "package.sh"
+
+                if [[ ! -n "$PACKAGE_NAME" ]]; then
+                    PACKAGE_NAME=$folder_name
+                fi
+
+                print_package_info
+            fi
+
+            prompt "Install from the \e[1m$folder_name\e[0m folder?"
+
+            if [[ $? -eq 1 ]]; then
+                INSTOLL=true bash "install.sh"
+            else
+                echo "Canceled."
+                exit 0
+            fi
+        else
+            error "\e[1minstall.sh\e[0m not found."
+        fi
+    fi
+
+    echo "Installation completed."
+}
+
+if [[ -z $1 || $1 == "--help" || $1 == "help" ]]; then
+    show_help
+elif [[ ! -z $1 ]]; then
+    instoll "$1"
+fi

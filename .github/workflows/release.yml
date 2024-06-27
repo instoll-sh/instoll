@@ -1,0 +1,48 @@
+name: Publish packages for release
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  id-token: write
+  attestations: write
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: 🏷️ Check tag name
+        run: |
+          tag="${{ github.ref_name }}"
+          echo "$tag" | grep -Pq "^v\d+\.\d+\.\d+$" || (echo "::error::Tag name '$tag' does not correct." && exit 1)
+
+      - name: 📥 Clone repository
+        uses: actions/checkout@v4.1.5
+
+      - name: ✅ Attest binary
+        uses: actions/attest-build-provenance@v1.1.2
+        # Read: https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds
+        with:
+          subject-path: |
+            instoll
+
+      - name: 🔏 Generate sha256sum for executable
+        run: make checksum
+
+      - name: ⬆️ Upload files to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            instoll
+            instoll.sha256
+
+      - name: 🚀 Print action summary
+        run: |
+          echo "### Done! :rocket:" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,30 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/ubuntu
+{
+    "name": "instoll",
+    "image": "mcr.microsoft.com/devcontainers/base:jammy",
+    "features": {
+        "ghcr.io/devcontainers/features/github-cli:1": {},
+        "ghcr.io/eitsupi/devcontainer-features/go-task:1": {},
+        "ghcr.io/jungaretti/features/make:1": {}
+    },
+
+    "privileged": true,
+
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "resmon.show.battery": false,
+                "resmon.show.cpufreq": false
+            },
+            "extensions": [
+                "DavidAnson.vscode-markdownlint",
+                "mads-hartmann.bash-ide-vscode",
+                "docsmsft.docs-yaml",
+                "shardulm94.trailing-spaces",
+                "redhat.vscode-yaml",
+                "bierner.markdown-checkbox"
+            ]
+        }
+    }
+}
