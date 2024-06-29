@@ -13,7 +13,8 @@ hyperlink() {
 
 # Remove color markings from text
 normalize() {
-    echo -e "$1" | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]//g"
+    echo -e "$1" | sed -r 's/\x1B\]8;;[^\\]+\\([^\x1B]+)\x1B\]8;;\x1B\\/\1/g; s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]//g'
+    # echo -E "$1"
 }
 
 # shellcheck disable=SC2120
@@ -34,14 +35,19 @@ wrap_text() {
 
     for line in "${lines[@]}"; do
         local normalized_line=$(normalize "$line")
-        # echo "$normalized_line"
+
+        # Similar bug: https://bugs.launchpad.net/ubuntu/+source/cowsay/+bug/393212
+        # Patch with fixes: https://github.com/okineadev/idinahui/blob/main/cowsay.patch
+        # I'll leave it just in case.
+        local line_lenght=$(($(echo -e "$normalized_line" | wc -c) - 1 ))
+
         # Ugly naming
-        local is_larger=$(( max_len - ${#normalized_line} > 0  ))
+        local is_larger=$(( max_len - line_lenght > 0  ))
 
         printf "│"
         printf ' %.0s' $(seq 1 $margin)
         printf "%s" "$line"
-        [[ $is_larger -eq 1 ]] && printf ' %.0s' $(seq 1 $((max_len - margin - ${#normalized_line})))
+        [[ $is_larger -eq 1 ]] && printf ' %.0s' $(seq 1 $((max_len - margin - line_lenght)))
         printf "│\n"
     done
 
@@ -180,18 +186,10 @@ instoll() {
                 rm "$package_sh"
             fi
 
-            if [[ ! -n "$PACKAGE_NAME" ]]; then
-                PACKAGE_NAME="$repo"
-            fi
-            if [[ ! -n "$PACKAGE_SOURCE" ]]; then
-                PACKAGE_SOURCE="https://github.com/$username/$repo"
-            fi
-            if [[ ! -n "$DEVELOPER" ]]; then
-                DEVELOPER="$(hyperlink "https://github.com/$username" "$username")"
-            fi
-            if [[ ! -n "$TAGS" ]]; then
-                TAGS="$(github_api get_topics "$username" "$repo")"
-            fi
+            [[ ! -n "$PACKAGE_NAME" ]] && PACKAGE_NAME="$repo"
+            [[ ! -n "$PACKAGE_SOURCE" ]] && PACKAGE_SOURCE="https://github.com/$username/$repo"
+            [[ ! -n "$DEVELOPER" ]] && DEVELOPER="$(hyperlink "https://github.com/$username" "$username")"
+            [[ ! -n "$TAGS" ]] && TAGS="$(github_api get_topics "$username" "$repo")"
 
             print_package_info
 
