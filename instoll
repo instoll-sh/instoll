@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+# shellcheck disable=SC2155
+# shellcheck disable=SC2120
+# shellcheck disable=SC2143
+# shellcheck disable=SC2236
+# shellcheck disable=SC2181
+
 # === COLORS ===
 RED='\e[1;31m'
 GREEN='\e[1;32m'
@@ -21,7 +27,6 @@ normalize() {
     echo -e "$1" | sed -r 's/\x1B\]8;;[^\\]+\\([^\x1B]+)\x1B\]8;;\x1B\\/\1/g; s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]//g'
 }
 
-# shellcheck disable=SC2120
 wrap_text() {
     local text="$1"
     local lines=()
@@ -129,7 +134,7 @@ prompt() {
 
         else
             if [ "$attempts" -lt 3 ]; then
-                echo -e "\n\e[1;31mInvalid response\e[0m. Please enter '\e[1my\e[0m' or '\e[1mn\e[0m'."
+                echo -e "\n${RED}Invalid response${RESET}. Please enter '\e[1my\e[0m' or '\e[1mn\e[0m'."
                 sleep "1"
             fi
             ((attempts++))
@@ -142,12 +147,15 @@ github_api() {
     local username="$2"
     local repo="$3"
 
+    local api_provider="api.github.com"
+    local api_url="https://$api_provider"
+
     case "$1" in
         check_file_availability)
-            local github_api_url="https://api.github.com/repos/$username/$repo/contents"
+            local endpoint="$api_url/repos/$username/$repo/contents"
             local filename="$4"
 
-            local response="$(curl -s "$github_api_url/$filename")"
+            local response="$(curl -s "$endpoint/$filename")"
 
             if echo "$response" | jq -e '.message == "Not Found"' &> /dev/null; then
                 return 1
@@ -156,15 +164,17 @@ github_api() {
             fi
             ;;
         get_topics)
-            local github_api_url="https://api.github.com/repos/$username/$repo/topics"
-            local response=$(curl -fsSL "$github_api_url")
+            local endpoint="$api_url/repos/$username/$repo/topics"
+
+            local response=$(curl -fsSL "$endpoint")
             local result=$(echo "$response" | jq -r '.names | join(", ")')
 
             echo "$result"
             ;;
         get_default_branch)
-            local github_api_url="https://api.github.com/repos/$username/$repo"
-            local response=$(curl -fsSL "$github_api_url")
+            local endpoint="$api_url/repos/$username/$repo"
+
+            local response=$(curl -fsSL "$endpoint")
             local default_branch="$(echo "$response" | jq -r '.default_branch')"
 
             echo "$default_branch"
@@ -192,6 +202,7 @@ instoll() {
             if github_api check_file_availability "$username" "$repo" "package.sh"; then
                 local package_sh=$(mktemp)
                 curl -fsSL "$github_url/package.sh" -o "$package_sh"
+                # shellcheck disable=SC1090
                 source "$package_sh"
                 rm "$package_sh"
             fi
@@ -207,20 +218,23 @@ instoll() {
             installer="$1"
         fi
 
-        prompt "Install?"
+        if [[ ! "$*" =~ "-y" ]]; then
+            prompt "Install?"
 
-        if [[ $? -eq 1 ]]; then
-            curl -fsSL "$installer" | INSTOLL=true bash
-        else
-            echo "Canceled."
-            exit 0
+            if [[ $? -eq 0 ]]; then
+                echo "Canceled."
+                exit 0
+            fi
         fi
+
+        curl -fsSL "$installer" | INSTOLL=true bash
 
     elif [[ "$1" == . ]]; then
         if [[ -f "install.sh" ]]; then
             local folder_name=$(basename "$(pwd)")
 
             if [[ -f "package.sh" ]]; then
+                # shellcheck disable=SC1091
                 source "package.sh"
 
                 if [[ ! -n "$PACKAGE_NAME" ]]; then
@@ -230,14 +244,16 @@ instoll() {
                 print_package_info
             fi
 
-            prompt "Install from the \e[1m$folder_name\e[0m folder?"
+            if [[ ! "$*" =~ "-y" ]]; then
+                prompt "Install from the \e[1m$folder_name\e[0m folder?"
 
-            if [[ $? -eq 1 ]]; then
-                INSTOLL=true bash "install.sh"
-            else
-                echo "Canceled."
-                exit 0
+                if [[ $? -eq 0 ]]; then
+                    echo "Canceled."
+                    exit 0
+                fi
             fi
+
+            INSTOLL=true bash "install.sh"
         else
             error "\e[1minstall.sh\e[0m not found."
         fi
@@ -249,5 +265,5 @@ instoll() {
 if [[ -z $1 || $1 == "--help" || $1 == "help" ]]; then
     show_help
 elif [[ ! -z $1 ]]; then
-    instoll "$1"
+    instoll "$@"
 fi
