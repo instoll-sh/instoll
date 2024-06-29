@@ -7,9 +7,9 @@
 ![GitHub Repo stars][github-stars]
 
 <div align="center">
-  <!-- <a href="https://github.com/instoll-sh/instoll">
-    <img src="images/logo.png" alt="Logo" width="80" height="80">
-  </a> -->
+  <a href="https://github.com/instoll-sh/instoll">
+    <img src="public/logo-light.png" alt="Logo">
+  </a>
 
 <h3 align="center">instoll</h3>
 
