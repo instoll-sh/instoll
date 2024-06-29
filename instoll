@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 
+# === COLORS ===
+RED='\e[1;31m'
+GREEN='\e[1;32m'
+RESET='\e[0m'
+
 # Function to print error messages
 error() {
-    echo -e "\e[1;31mERROR!\e[0m\n\n  $1"
+    echo -e "${RED}ERROR!${RESET}[\n\n  $1"
     exit 1
 }
 
@@ -14,7 +19,6 @@ hyperlink() {
 # Remove color markings from text
 normalize() {
     echo -e "$1" | sed -r 's/\x1B\]8;;[^\\]+\\([^\x1B]+)\x1B\]8;;\x1B\\/\1/g; s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]//g'
-    # echo -E "$1"
 }
 
 # shellcheck disable=SC2120
@@ -28,10 +32,13 @@ wrap_text() {
     done <<< "$text"
 
     local margin=1
-    local term_width=$(stty size | awk '{print $2}')
-    local max_len=$((term_width - 2))
+    local COLOR="$GREEN"
+    local term_width="$(stty size | awk '{print $2}')"
+    local max_len="$((term_width - 2))"
 
-    echo "╭$(printf '─%.0s' $(seq 1 "$max_len"))╮"
+    local text=""
+
+    text+="${COLOR}╭$(printf '─%.0s' $(seq 1 "$max_len"))╮${RESET}\n"
 
     for line in "${lines[@]}"; do
         local normalized_line=$(normalize "$line")
@@ -39,19 +46,22 @@ wrap_text() {
         # Similar bug: https://bugs.launchpad.net/ubuntu/+source/cowsay/+bug/393212
         # Patch with fixes: https://github.com/okineadev/idinahui/blob/main/cowsay.patch
         # I'll leave it just in case.
-        local line_lenght=$(($(echo -e "$normalized_line" | wc -c) - 1 ))
+        local line_lenght=$(echo -n "$normalized_line" | wc -m)
+        # local line_lenght=$((${#normalized_line} + 1))
 
         # Ugly naming
-        local is_larger=$(( max_len - line_lenght > 0  ))
+        local is_larger=$(( max_len - line_lenght > 0 ))
 
-        printf "│"
-        printf ' %.0s' $(seq 1 $margin)
-        printf "%s" "$line"
-        [[ $is_larger -eq 1 ]] && printf ' %.0s' $(seq 1 $((max_len - margin - line_lenght)))
-        printf "│\n"
+        text+="${COLOR}│${RESET}"
+        text+=$(printf ' %.0s' $(seq 1 $margin))
+        text+="$line"
+        [[ $is_larger -eq 1 ]] && text+=$(printf ' %.0s' $(seq 1 $((max_len - margin - line_lenght))))
+        text+="${COLOR}│${RESET}\n"
     done
 
-    echo "╰$(printf '─%.0s' $(seq 1 "$max_len"))╯"
+    text+="${COLOR}╰$(printf '─%.0s' $(seq 1 "$max_len"))╯${RESET}"
+
+    echo -e "$text"
 }
 
 # Check if required tools are installed
