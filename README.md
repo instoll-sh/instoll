@@ -38,6 +38,8 @@ The installer is **much easier** to write, besides, this option is much more **f
 
 ### Why "instOll" ?
 
+`[ɪnˈstɔːl]`
+
 This name comes from the word "**install**" with an **Indian accent**, as in cool YouTube programming guides from Indians 🙃
 
 ---
