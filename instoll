@@ -6,14 +6,27 @@
 # shellcheck disable=SC2236
 # shellcheck disable=SC2181
 
+ALIASES_PATH="$PREFIX/usr/share/instoll/aliases"
+[[ -n "$ALIASES_REMOTE_REGISTRY" ]] || ALIASES_REMOTE_REGISTRY="https://raw.githubusercontent.com/instoll-sh/instoll-aliases/main/aliases"
+
 # === COLORS ===
-RED='\e[1;31m'
-GREEN='\e[1;32m'
+BOLD='\e[1m'
+UNDERLINE='\e[4m'
+RED='\e[31m'
+BOLD_RED='\e[1;31m'
+GREEN='\e[32m'
+BOLD_GREEN='\e[1;32m'
 RESET='\e[0m'
+
+sudo="sudo"
+
+if echo "$OSTYPE" | grep -qE '^(linux-android|msys).*'; then
+    sudo=""
+fi
 
 # Function to print error messages
 error() {
-    echo -e "${RED}ERROR!${RESET}[\n\n  $1"
+    echo -e "${BOLD_RED}ERROR!${RESET}\n\n  $1"
     exit 1
 }
 
@@ -25,6 +38,10 @@ hyperlink() {
 # Remove color markings from text
 normalize() {
     echo -e "$1" | sed -r 's/\x1B\]8;;[^\\]+\\([^\x1B]+)\x1B\]8;;\x1B\\/\1/g; s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]//g'
+}
+
+available() {
+    command -v $1 >/dev/null
 }
 
 wrap_text() {
@@ -43,7 +60,10 @@ wrap_text() {
 
     local text=""
 
-    text+="${COLOR}╭$(printf '─%.0s' $(seq 1 "$max_len"))╮${RESET}\n"
+    local title="Information"
+    local title_lenght=$(( $(echo -n "$title" | wc -m) + 3 ))
+
+    text+="${COLOR}╭(${RESET}${BOLD}$title${RESET}${COLOR})$(printf '─%.0s' $(seq "$title_lenght" "$max_len"))╮${RESET}\n"
 
     for line in "${lines[@]}"; do
         local normalized_line=$(normalize "$line")
@@ -69,43 +89,72 @@ wrap_text() {
     echo -e "$text"
 }
 
+get_alias() {
+    key="$1"
+    file="/usr/share/instoll/aliases"
+
+    if [ -z "$key" ]; then
+        error "No key provided"
+    fi
+
+    value=$(grep -i "^\"$key\"" "$file" | awk '{print $2}')
+
+    if [ -z "$value" ]; then
+        error "Unknown alias or command"
+    fi
+
+    echo "$value"
+}
+
 # Check if required tools are installed
-if ! command -v curl &> /dev/null; then
-    error "\e[1mcurl\e[0m is not installed."
+if ! available curl; then
+    error "${BOLD}curl${RESET} is not installed."
 fi
 
-if ! command -v jq &> /dev/null; then
-    error "\e[1mjq\e[0m is not installed."
+if ! available jq; then
+    error "${BOLD}jq${RESET} is not installed."
 fi
 
 # Display usage information
 show_help() {
-    echo "Usage: instoll <user>/<repo> or instoll <user>.<repo>"
-    echo ""
-    echo -e "This tool allows automatic installation of packages from \e[1mGitHub\e[0m repositories"
-    echo -e "using the \e[1minstall.sh\e[0m file if it is present."
-    echo ""
-    echo "Options:"
-    echo -e "  <user>/<repo>                       \e[1mGitHub\e[0m repository format for installing the package."
-    echo "  <user>.<repo>                       Alternative format for specifying the repository."
-    echo "  https://useful.tool.sh/install.sh   Link to the installer"
-    echo "  .                                   Install package from current folder"
-    echo ""
-    echo "Examples:"
-    echo "  instoll username/repo"
-    echo "  instoll username.repo"
-    echo "  instoll https://bun.sh/install"
-    echo "  instoll ."
+    echo -e "\
+Usage: instoll [-h | --help] <command>
+
+This tool allows automatic installation of packages from ${BOLD}GitHub${RESET} repositories
+using the ${BOLD}install.sh${RESET} file if it is present.
+
+Options:
+  <package>                           Package name
+  update, updates                     Update list of aliases for packages
+  <user>/<repo>                       ${BOLD}GitHub${RESET} repository format for installing the package.
+  <user>.<repo>                       Alternative format for specifying the repository.
+  https://useful.tool.sh/install.sh   Link to the installer.
+  .                                   Install package from current folder.
+
+Examples:
+  instoll bun                         Install ${BOLD}Bun${RESET} (${UNDERLINE}https://bun.sh${RESET})
+  instoll updates                     Update list of aliases for packages
+  instoll username/repo               Install from ${BOLD}GitHub${RESET} repository using 'username${BOLD}/${RESET}repo' format.
+  instoll username.repo               Install from ${BOLD}GitHub${RESET} repository using 'username${BOLD}.${RESET}repo' format.
+  instoll https://bun.sh/install      Install using a direct link to an installer script.
+  instoll .                           Install package from the current directory.
+
+Options:
+  -h, --help, help                    Show this help message and exit.
+
+Links:
+  Source code: <${UNDERLINE}https://github.com/instoll-sh/instoll${RESET}>
+  Report bugs and suggestions: <${UNDERLINE}https://github.com/instoll-sh/instoll/issues${RESET}>"
 }
 
 # Get package information based on variables
 get_package_info() {
     local text=""
-    [[ -n "$PACKAGE_NAME" ]] && echo -e "\e[1mName\e[0m: $PACKAGE_NAME"
-    [[ -n "$DEVELOPER" ]] && echo -e "\e[1mDeveloper\e[0m: $DEVELOPER"
-    [[ -n "$PACKAGE_SOURCE" ]] && echo -e "\e[1mSource code\e[0m: $PACKAGE_SOURCE"
-    [[ -n "$DESCRIPTION" ]] && echo -e "\e[1mDescription\e[0m: $DESCRIPTION"
-    [[ -n "$TAGS" ]] && echo -e "\e[1mTags\e[0m: $TAGS"
+    [[ -n "$PACKAGE_NAME" ]] && echo -e "${BOLD}Name${RESET}: ${UNDERLINE}$PACKAGE_NAME${RESET}"
+    [[ -n "$DEVELOPER" ]] && echo -e "${BOLD}Developer${RESET}: $DEVELOPER"
+    [[ -n "$PACKAGE_SOURCE" ]] && echo -e "${BOLD}Source code${RESET}: $PACKAGE_SOURCE"
+    [[ -n "$DESCRIPTION" ]] && echo -e "${BOLD}Description${RESET}: $DESCRIPTION"
+    [[ -n "$TAGS" ]] && echo -e "${BOLD}Tags${RESET}: $TAGS"
 }
 
 print_package_info() {
@@ -124,7 +173,7 @@ prompt() {
         fi
 
         # shellcheck disable=SC2059
-        printf "$question \e[1m(Y/n)\e[0m: "
+        printf "$question ${BOLD}(Y/n)${RESET}: "
         read -r response
         if echo "$response" | grep -Eiq '^(y|yes)$'; then
             return 1
@@ -134,7 +183,7 @@ prompt() {
 
         else
             if [ "$attempts" -lt 3 ]; then
-                echo -e "\n${RED}Invalid response${RESET}. Please enter '\e[1my\e[0m' or '\e[1mn\e[0m'."
+                echo -e "\n${RED}Invalid response${RESET}. Please enter '${BOLD}y${RESET}' or '${BOLD}n${RESET}'."
                 sleep "1"
             fi
             ((attempts++))
@@ -179,25 +228,26 @@ github_api() {
 
             echo "$default_branch"
             ;;
-    esac
-}
+        get_package_info)
+            if [[ ! $(echo "$link" | grep -E '^\S+[.\/]\S+$') ]]; then
+                local username="$2"
+                local repo="$3"
+            else
+                local username=$(echo "$2" | sed 's/[./].*//')
+                local repo=$(echo "$2" | sed 's/^[^./]*[./]//')
+            fi
 
-instoll() {
-    local installer=""
-
-    if [[ ! "$1" == . ]]; then
-        if [[ $(echo "$1" | grep -E '^\S+([.\/]\S+|$)$') ]]; then
-            local username=$(echo "$1" | sed 's/[./].*//')
-            local repo=$(echo "$1" | sed 's/^[^./]*[./]//')
             local branch=$(github_api get_default_branch "$username" "$repo")
 
             local github_url="https://raw.githubusercontent.com/$username/$repo/$branch"
 
-            if github_api check_file_availability "$username" "$repo" "install.sh"; then
-                installer="$github_url/install.sh"
-            else
-                error "file install.sh not found in repository $username/$repo."
+            if [[ ! -n "$SKIP_INSTALL_SH_CHECKING" ]]; then
+                if ! github_api check_file_availability "$username" "$repo" "install.sh"; then
+                    error "file install.sh not found in repository $username/$repo."
+                fi
             fi
+
+            installer="$github_url/install.sh"
 
             if github_api check_file_availability "$username" "$repo" "package.sh"; then
                 local package_sh=$(mktemp)
@@ -207,16 +257,46 @@ instoll() {
                 rm "$package_sh"
             fi
 
+            # Get info based on GitHub repo
             [[ ! -n "$PACKAGE_NAME" ]] && PACKAGE_NAME="$repo"
             [[ ! -n "$PACKAGE_SOURCE" ]] && PACKAGE_SOURCE="https://github.com/$username/$repo"
             [[ ! -n "$DEVELOPER" ]] && DEVELOPER="$(hyperlink "https://github.com/$username" "$username")"
             [[ ! -n "$TAGS" ]] && TAGS="$(github_api get_topics "$username" "$repo")"
+            ;;
+    esac
+}
 
-            print_package_info
+instoll() {
+    local installer=""
 
-        elif [[ $(echo "$1" | grep -E '^(\w+([./]\w+|$)|(http[s]://|^)\S+)$') ]]; then
+    # Getting package info
+    if [[ ! "$1" == . ]]; then
+        if [[ $(echo "$1" | grep -E '^\w+[.\/]\w+$') ]]; then
+            local username=$(echo "$1" | sed 's/[./].*//')
+            local repo=$(echo "$1" | sed 's/^[^./]*[./]//')
+
+            github_api get_package_info "$username" "$repo"
+
+        elif [[ $(echo "$1" | grep -E '^https?:\/\/\S+$') ]]; then
             installer="$1"
+
+        else
+            if [[ -f "$ALIASES_PATH" ]]; then
+                link="$(get_alias "$1")"
+
+                if [[ $(echo "$link" | grep -E '^\w+[.\/]\w+$') ]]; then
+                    SKIP_INSTALL_SH_CHECKING=true github_api get_package_info "$link"
+                else
+                    installer="$link"
+
+                    # Name in lowercase
+                    PACKAGE_NAME="${1,,}"
+                    PACKAGE_SOURCE="$installer"
+                fi
+            fi
         fi
+
+        print_package_info
 
         if [[ ! "$*" =~ "-y" ]]; then
             prompt "Install?"
@@ -245,7 +325,7 @@ instoll() {
             fi
 
             if [[ ! "$*" =~ "-y" ]]; then
-                prompt "Install from the \e[1m$folder_name\e[0m folder?"
+                prompt "Install from the ${BOLD}$folder_name${RESET} folder?"
 
                 if [[ $? -eq 0 ]]; then
                     echo "Canceled."
@@ -255,15 +335,55 @@ instoll() {
 
             INSTOLL=true bash "install.sh"
         else
-            error "\e[1minstall.sh\e[0m not found."
+            error "${BOLD}install.sh${RESET} not found."
         fi
     fi
 
     echo "Installation completed."
 }
 
-if [[ -z $1 || $1 == "--help" || $1 == "help" ]]; then
+update_aliases() {
+    local temp_file="$(mktemp -t "instoll-aliases-XXXXXX")"
+    local needs_update=false
+
+    echo "Loading..."
+    echo -e "${BOLD_GREEN}↪${RESET} ${BOLD}Registry${RESET}: $ALIASES_REMOTE_REGISTRY"
+    echo ""
+
+    curl -fSsLo "$temp_file" "$ALIASES_REMOTE_REGISTRY"
+
+    local shasum_cmd=""
+
+    if available sha256; then
+        shasum_cmd="sha256sum"
+    elif available shasum; then
+        shasum_cmd="shasum -a 256"
+    fi
+
+    if [[ ! -z "$shasum_cmd" ]]; then
+        if [[ ! "$($shasum_cmd "$temp_file" | awk '{print $1}')" == "$($shasum_cmd "$ALIASES_PATH" | awk '{print $1}')" ]]; then
+            needs_update=true
+        fi
+    else
+        if [[ ! "$(cat "$temp_file")" == "$(cat "$ALIASES_PATH")" ]]; then
+            needs_update=true
+        fi
+    fi
+
+    if [[ "$needs_update" == "true" ]]; then
+        $sudo cp "$temp_file" "$ALIASES_PATH"
+        echo "Aliases updated!"
+    else
+        echo "Aliases are up-to-date!"
+    fi
+
+    rm "$temp_file"
+}
+
+if [[ -z $1 || $1 == "--help" || $1 == "-h" || $1 == "help" ]]; then
     show_help
+elif [[ "$1" == "updates" || "$1" == "update" ]]; then
+    update_aliases
 elif [[ ! -z $1 ]]; then
     instoll "$@"
 fi

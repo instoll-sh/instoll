@@ -4,11 +4,22 @@
 
 # Folder for the installation environment
 # shellcheck disable=SC2153
-TEMP="$PREFIX/tmp"
-TEMP_DIR="$TEMP/instoller"
 EXECUTABLE_LINK="https://github.com/instoll-sh/instoll/releases/latest/download/instoll"
 
-mkdir "$TEMP_DIR"
+INSTOLL_DIR="$PREFIX/usr/share/instoll"
+ALIASES_PATH="$INSTOLL_DIR/aliases"
+[[ -n "$ALIASES_REMOTE_REGISTRY" ]] || ALIASES_REMOTE_REGISTRY="https://raw.githubusercontent.com/instoll-sh/instoll-aliases/main/aliases"
+
+# === COLORS ===
+BOLD='\e[1m'
+UNDERLINE='\e[4m'
+RED='\e[31m'
+BOLD_RED='\e[1;31m'
+GREEN='\e[32m'
+BOLD_GREEN='\e[1;32m'
+RESET='\e[0m'
+
+TEMP_DIR=$(mktemp -dt 'instoll-XXXXXX')
 
 # Modifiable prefix variable
 prefix="$PREFIX"
@@ -53,7 +64,7 @@ available() {
 }
 
 current_step=0
-steps=3
+steps=4
 
 if [[ ! "$SKIP_CHECKSUM_VALIDATION" == "true" ]]; then
     ((steps++))
@@ -62,7 +73,7 @@ fi
 
 step() {
     ((current_step++))
-    echo -e "\e[1;32m↪\e[0m [$current_step/$steps] \e[1m$1\e[0m"
+    echo -e "${BOLD_GREEN}↪${RESET} [$current_step/$steps] ${BOLD}$1${RESET}"
 }
 
 shasum_cmd=""
@@ -76,6 +87,7 @@ else
 fi
 
 validate_checksum() {
+    # shellcheck disable=SC2068
     $shasum_cmd --quiet --status -c $@
 }
 
@@ -98,7 +110,7 @@ if [[ ! "$SKIP_CHECKSUM_VALIDATION" == "true" ]]; then
         echo "✅ Checksum validated"
     else
         echo "❌ The checksum is invalid, please try again"
-        echo "    If the result is the same - report the error at this link: https://github.com/instoll-sh/instoll/issues/new?assignees=okineadev&labels=bug&template=bug_report.md&title=[Bug]:+invalid+checksum"
+        echo "    If the result is the same - report the error at this link: <${UNDERLINE}https://github.com/instoll-sh/instoll/issues/new?assignees=okineadev&labels=bug&template=bug_report.md&title=[Bug]:+invalid+checksum${RESET}>"
 
         rm -rf "$TEMP_DIR"
         exit 1
@@ -107,7 +119,6 @@ fi
 
 # Makes the script executable
 chmod +x instoll
-
 
 if [[ -f "$prefix/bin/instoll" ]]; then
     step "Updating"
@@ -123,7 +134,7 @@ if ! available git; then
     step "Installing dependencies"
 
     if [[ ! -n "$pkgmgr" ]]; then
-        echo -e "$pkgmgr in not defined\nPlease install \e[1mjq\e[0m manually."
+        echo -e "$pkgmgr in not defined\nPlease install ${BOLD}jq${RESET} manually."
         exit 1
     else
         if [[ "$pkgmgr" == "brew" ]]; then
@@ -140,7 +151,18 @@ fi
 
 $sudo cp instoll "$prefix/bin"
 
+step "Downloading a list of packages"
+echo -e "  ${BOLD_GREEN}↪${RESET} ${BOLD}Registry${RESET}: $ALIASES_REMOTE_REGISTRY"
+
+curl -fsO "$ALIASES_REMOTE_REGISTRY"
+
+if [[ ! -d "$INSTOLL_DIR" ]]; then
+    $sudo mkdir "$INSTOLL_DIR"
+fi
+
+$sudo cp "aliases" "$ALIASES_PATH"
+
 step "Cleaning"
 rm -rf "$TEMP_DIR"
 
-echo -e "\n\e[1;32mDone!\e[0m"
+echo -e "\n${BOLD_GREEN}Done!${RESET}"
