@@ -23,6 +23,15 @@
   </p>
 </div>
 
+<br>
+
+> [!WARNING]
+> This project is no longer supported, creating aliases in the repository [instoll-aliases](https://github.com/instoll-sh/instoll-aliases) will be supported.
+>
+> If you wish, you can create your own fork of this repository with your changes
+
+<br>
+
 <!-- ABOUT THE PROJECT -->
 ## ℹ️ About The Project
 
